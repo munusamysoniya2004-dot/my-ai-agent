@@ -7,6 +7,7 @@ from duckduckgo_search import DDGS
 import PyPDF2
 from gtts import gTTS
 import os
+import time
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Suresh's Ultimate AI", page_icon="🤖", layout="wide")
@@ -15,31 +16,25 @@ try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except:
     # 👇 UNGA API KEY INGA PODUNGA
-    api_key = "AIzaSyBG9FHTRxsUMSshxx6IPoz3SBoDZijKE9E"
+    api_key = "AIzaSy_UNGA_ORIGINAL_KEY_INGA_IRUKKANUM"
 
 genai.configure(api_key=api_key)
 
-# --- 2. SIDEBAR (CONTROLS) ---
+# --- 2. SIDEBAR ---
 with st.sidebar:
     st.title("🤖 Ultimate AI Agent")
-    st.caption("Built by Suresh | Hour 35")
+    st.caption("Powered by Gemini 1.5 Flash ⚡")
     
-    # Navigation
     selected_mode = st.radio(
         "Choose Tool:",
-        ["🏠 Home", "🌐 Internet Search", "📄 Chat with PDF", "🧠 Memory Chat", "📊 Data Analyst", "🎨 AI Artist"]
+        ["🏠 Home", "🎥 Video Analyst", "🌐 Internet Search", "📄 Chat with PDF", "🧠 Memory Chat", "📊 Data Analyst", "🎨 AI Artist"]
     )
     
     st.divider()
-    
-    # Hour 34: Custom Personality 🎭
-    st.subheader("⚙️ AI Personality")
     personality = st.selectbox("Act like...", ["Helpful Assistant", "Strict Boss", "Funny Friend", "Tamil Poet"])
-    
-    # Hour 33: Voice Toggle 🗣️
     voice_on = st.toggle("Enable Voice Response")
 
-# --- HELPER: TEXT TO SPEECH ---
+# --- HELPER FUNCTIONS ---
 def speak(text):
     if voice_on:
         try:
@@ -47,125 +42,142 @@ def speak(text):
             tts.save("response.mp3")
             st.audio("response.mp3")
         except:
-            st.warning("Audio generation failed.")
+            pass
 
-# --- HELPER: SYSTEM PROMPT ---
 def get_system_prompt():
-    if personality == "Strict Boss":
-        return "You are a strict corporate boss. Be brief, professional, and slightly demanding."
-    elif personality == "Funny Friend":
-        return "You are a funny friend. Use emojis, jokes, and casual slang (Thanglish allowed)."
-    elif personality == "Tamil Poet":
-        return "You are a Tamil poet. Answer poetically, preferably in Tamil or poetic English."
-    else:
-        return "You are a helpful AI assistant."
+    if personality == "Strict Boss": return "You are a strict boss. Be brief."
+    if personality == "Funny Friend": return "You are a funny friend. Use emojis."
+    if personality == "Tamil Poet": return "You are a Tamil poet. Answer poetically."
+    return "You are a helpful AI assistant."
 
 # --- 3. MODES ---
 
 # 🏠 HOME
 if selected_mode == "🏠 Home":
     st.title("🚀 The Ultimate AI Dashboard")
-    st.markdown(f"""
-    Welcome! I am running in **{personality}** mode.
+    st.markdown("""
+    **Update:** Now running on **Gemini 1.5 Flash** (Stable & Fast).
     
-    **New Features Added:**
-    * 📄 **PDF RAG:** I can read your documents.
-    * 🗣️ **Voice:** I can speak back to you.
-    * 🎭 **Persona:** I can change my character.
+    **Capabilities:**
+    Text 📝 | Voice 🗣️ | Vision 👁️ | Data 📊 | Internet 🌐 | Video 🎥
     """)
 
-# 🌐 INTERNET SEARCH
-elif selected_mode == "🌐 Internet Search":
-    st.header("🌐 Live Internet Search")
-    query = st.text_input("What's happening in the world?")
-    if st.button("🔍 Search"):
-        if query:
-            with st.spinner("Searching..."):
+# 🎥 VIDEO ANALYST
+elif selected_mode == "🎥 Video Analyst":
+    st.header("🎥 AI Video Analyst")
+    st.caption("Upload a short video (MP4) -> I will watch and explain it.")
+    
+    video_file = st.file_uploader("Upload MP4 Video", type=["mp4"])
+    
+    if video_file:
+        st.video(video_file)
+        
+        user_query = st.text_input("Ask about the video:", placeholder="What is happening in this video?")
+        
+        if st.button("Analyze Video"):
+            with st.spinner("Uploading & Watching video..."):
                 try:
-                    results = DDGS().text(query, max_results=4)
-                    search_data = "\n".join([f"- {r['title']}: {r['body']}" for r in results])
+                    # 1. Save temp file locally
+                    with open("temp_video.mp4", "wb") as f:
+                        f.write(video_file.getbuffer())
                     
-                    model = genai.GenerativeModel("models/gemini-flash-latest")
-                    prompt = f"{get_system_prompt()}\nUser asked: {query}\nWeb Results: {search_data}\nSummarize this."
+                    # 2. Upload to Google AI File Manager
+                    myfile = genai.upload_file("temp_video.mp4")
                     
-                    response = model.generate_content(prompt).text
-                    st.write(response)
-                    speak(response) # Voice Output
+                    # 3. Wait for processing
+                    while myfile.state.name == "PROCESSING":
+                        time.sleep(2)
+                        myfile = genai.get_file(myfile.name)
+                        
+                    # 4. Generate Content (FIXED MODEL)
+                    # "gemini-1.5-flash" is standard and stable
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    prompt = f"{get_system_prompt()}\nUser Question: {user_query}\nAnswer based on the video."
+                    
+                    response = model.generate_content([myfile, prompt])
+                    
+                    st.success("Analysis Complete!")
+                    st.write(response.text)
+                    speak(response.text)
+                    
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-# 📄 CHAT WITH PDF (New Integration!)
+# 🌐 INTERNET SEARCH
+elif selected_mode == "🌐 Internet Search":
+    st.header("🌐 Internet Search")
+    q = st.text_input("Search Query:")
+    if st.button("Search") and q:
+        with st.spinner("Searching..."):
+            try:
+                res = DDGS().text(q, max_results=3)
+                if res:
+                    txt = "\n".join([f"{r['title']}: {r['body']}" for r in res])
+                    # FIXED MODEL
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    ans = model.generate_content(f"{get_system_prompt()}\nContext: {txt}\nQ: {q}").text
+                    st.write(ans)
+                    speak(ans)
+                else:
+                    st.warning("No results found.")
+            except Exception as e: st.error(f"Error: {e}")
+
+# 📄 PDF CHAT
 elif selected_mode == "📄 Chat with PDF":
-    st.header("📄 Chat with Documents")
-    pdf_file = st.file_uploader("Upload PDF", type=["pdf"])
-    
-    if pdf_file:
-        reader = PyPDF2.PdfReader(pdf_file)
-        pdf_text = ""
-        for page in reader.pages:
-            pdf_text += page.extract_text()
-            
-        st.success("PDF Loaded! Ask questions below.")
-        
-        question = st.text_input("Ask about the PDF:")
-        if question:
-            model = genai.GenerativeModel("models/gemini-flash-latest")
-            prompt = f"{get_system_prompt()}\nContext from PDF:\n{pdf_text}\n\nQuestion: {question}"
-            response = model.generate_content(prompt).text
-            st.write(response)
-            speak(response)
+    st.header("📄 PDF Chat")
+    f = st.file_uploader("Upload PDF", type=["pdf"])
+    if f:
+        reader = PyPDF2.PdfReader(f)
+        txt = "".join([p.extract_text() for p in reader.pages])
+        q = st.text_input("Ask PDF:")
+        if q:
+            # FIXED MODEL
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            ans = model.generate_content(f"{get_system_prompt()}\nPDF: {txt}\nQ: {q}").text
+            st.write(ans)
+            speak(ans)
 
 # 🧠 MEMORY CHAT
 elif selected_mode == "🧠 Memory Chat":
-    st.header(f"🧠 Chat ({personality} Mode)")
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-
-    if user_input := st.chat_input("Type something..."):
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.write(user_input)
-
-        # Context Logic
-        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
-        prompt = f"{get_system_prompt()}\nHistory:\n{history_text}\nUser: {user_input}"
+    st.header("🧠 Memory Chat")
+    if "messages" not in st.session_state: st.session_state.messages = []
+    for m in st.session_state.messages: st.chat_message(m["role"]).write(m["content"])
+    if u := st.chat_input():
+        st.session_state.messages.append({"role":"user","content":u})
+        st.chat_message("user").write(u)
         
-        model = genai.GenerativeModel("models/gemini-flash-latest")
-        response = model.generate_content(prompt).text
+        # FIXED MODEL
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        h = "\n".join([f"{m['role']}:{m['content']}" for m in st.session_state.messages])
+        a = model.generate_content(f"{get_system_prompt()}\nHistory:{h}\nUser:{u}").text
         
-        with st.chat_message("assistant"):
-            st.write(response)
-            speak(response) # Voice Output
-        
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.chat_message("assistant").write(a)
+        st.session_state.messages.append({"role":"assistant","content":a})
+        speak(a)
 
 # 📊 DATA ANALYST
 elif selected_mode == "📊 Data Analyst":
-    st.header("📊 AI Data Analyst")
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file, encoding='latin1')
+    st.header("📊 Data Analyst")
+    f = st.file_uploader("Upload CSV", type=["csv"])
+    if f:
+        try: df = pd.read_csv(f, encoding='latin1')
+        except: df = pd.read_csv(f)
         st.dataframe(df.head())
-        q = st.text_input("Ask about data:")
+        q = st.text_input("Ask Data:")
         if q:
-            model = genai.GenerativeModel("models/gemini-flash-latest")
-            prompt = f"{get_system_prompt()}\nData: {df.head(20).to_string()}\nQuestion: {q}"
-            res = model.generate_content(prompt).text
-            st.write(res)
-            speak(res)
+            # FIXED MODEL
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            ans = model.generate_content(f"{get_system_prompt()}\nData:{df.head(10).to_string()}\nQ:{q}").text
+            st.write(ans)
+            speak(ans)
 
 # 🎨 AI ARTIST
 elif selected_mode == "🎨 AI Artist":
     st.header("🎨 AI Artist")
-    prompt = st.text_area("Describe image:")
-    if st.button("Generate"):
-        model = genai.GenerativeModel("models/gemini-flash-latest")
-        enhanced = model.generate_content(f"Enhance prompt: {prompt}").text
-        st.caption(f"Enhanced: {enhanced}")
+    p = st.text_area("Prompt:")
+    if st.button("Generate") and p:
+        # FIXED MODEL
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        enhanced = model.generate_content(f"Enhance: {p}").text
         url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(enhanced)}"
         st.image(url)
