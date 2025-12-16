@@ -1,46 +1,37 @@
 import streamlit as st
 import google.generativeai as genai
-import random 
+from PIL import Image
+import io  # <-- Puthusa add pannirukom (For safety)
 
 # --- 1. SETUP ---
-api_key = st.secrets["GEMINI_API_KEY"] 
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except:
+    # GitHub la podum pothu ithai delete pannanum!
+    api_key = "AIzaSy_INGA_UNGA_KEY_IRUKKANUM" 
+
 genai.configure(api_key=api_key)
 
-st.set_page_config(page_title="My Super AI Agent", page_icon="🤖")
-st.title("🤖 Tamil Super Agent")
-st.caption("Capabilities: 🌦️ Weather | 🏏 Cricket Scores")
+st.set_page_config(page_title="Super AI Agent", page_icon="👁️")
+st.title("👁️ AI with Vision")
+st.caption("Chat with me OR Upload an image to ask questions!")
 
-# --- 2. THE TOOLS (Functions) ---
-
-# Tool 1: Weather
-def get_weather(city: str):
-    """Returns weather for a city."""
-    city = city.lower().strip()
-    if "chennai" in city: return "Sunny, 32°C ☀️"
-    elif "coimbatore" in city: return "Pleasant, 28°C 🌤️"
-    elif "london" in city: return "Rainy, 15°C 🌧️"
-    elif "mumbai" in city: return "Humid, 30°C ☁️"
-    else: return "Unknown city data."
-
-# Tool 2: Cricket Score (NEW!)
-def get_cricket_score(team: str):
-    """Returns the latest cricket score for a given team or match."""
-    # Real app-la Cricbuzz API use pannuvom. Ippo Fake Data.
-    team = team.lower()
+# --- 2. IMAGE UPLOADER (Fixed Version) ---
+with st.sidebar:
+    st.header("📸 Give me Sight")
+    uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
     
-    if "csk" in team or "chennai" in team:
-        return "🏏 Match Update: CSK vs RCB. CSK won by 6 wickets! (Dhoni 25* off 10 balls)"
-    elif "india" in team:
-        return "🏏 Live: IND vs AUS. India 250/3 (45 Overs). Kohli batting on 95*."
-    elif "mi" in team or "mumbai" in team:
-        return "🏏 Result: MI lost to KKR by 15 runs."
-    else:
-        return "No live match found for this team."
+    image = None
+    if uploaded_file:
+        try:
+            # FIX: File-a direct-a open pannama, bytes-a maathi open panrom
+            image_bytes = uploaded_file.getvalue()
+            image = Image.open(io.BytesIO(image_bytes))
+            st.image(image, caption="Uploaded Image", use_column_width=True)
+        except Exception as e:
+            st.error(f"❌ Image Error: Antha file sari illa. Vera photo try pannunga. ({e})")
 
-# Tool List-la rendayum serkurom!
-my_tools = [get_weather, get_cricket_score]
-
-# --- 3. SESSION STATE ---
+# --- 3. CHAT LOGIC ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -48,8 +39,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# --- 4. CHAT LOGIC ---
-user_input = st.chat_input("Ask: 'CSK score?' or 'Chennai Weather?'")
+user_input = st.chat_input("Ask about the image or anything else...")
 
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -57,12 +47,15 @@ if user_input:
         st.write(user_input)
 
     try:
-        # Gemini with Tools
-        model = genai.GenerativeModel('models/gemini-flash-latest', tools=my_tools)
-        chat = model.start_chat(enable_automatic_function_calling=True)
-        
-        with st.spinner("🤖 Thinking & Checking Tools..."):
-            response = chat.send_message(user_input)
+        with st.spinner("🤖 Analyzing..."):
+            if image:
+                # Vision Model
+                model = genai.GenerativeModel('models/gemini-1.5-flash')
+                response = model.generate_content([user_input, image])
+            else:
+                # Text Only Model
+                model = genai.GenerativeModel('models/gemini-1.5-flash')
+                response = model.generate_content(user_input)
         
         bot_reply = response.text
         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
